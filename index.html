@@ -38,7 +38,37 @@
                 </div>
             </div>
         </section>
-        
+         <!-- Risk Management: Session Take Profit / Stop Loss -->
+        <section class="card" id="risk-management-card">
+            <h3>Session Take Profit / Stop Loss</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="tp-target">Take Profit ($):</label>
+                    <input type="number" id="tp-target" value="50" min="0" step="1">
+                </div>
+                <div class="form-group">
+                    <label for="sl-target">Stop Loss ($):</label>
+                    <input type="number" id="sl-target" value="30" min="0" step="1">
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <button id="btn-toggle-tpsl" class="btn-secondary">Arm TP/SL</button>
+                <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                    Session P/L: <strong id="session-profit-display" style="color: var(--text-primary);">0.00</strong>
+                </div>
+            </div>
+
+            <div class="tpsl-progress-track">
+                <div class="tpsl-progress-zero-marker"></div>
+                <div id="tpsl-progress-fill" class="tpsl-progress-fill"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-secondary);">
+                <span>-SL</span>
+                <span>0</span>
+                <span>+TP</span>
+            </div>
+        </section>
         <!-- tufetch accounts -->
         <section class="card">
             <h3><b>ACCOUNTS</b></h3>
