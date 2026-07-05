@@ -246,6 +246,7 @@ header p {
    so a jump-link never lands hidden underneath them. */
 #section-setup,
 #section-market,
+#section-challenge,
 #section-strategies,
 #section-ledger,
 #section-logs {
@@ -715,6 +716,89 @@ button:disabled, select:disabled, input:disabled {
     flex-direction: column;
     justify-content: center;
     line-height: 1.6;
+}
+
+/* ================= 30-DAY CHALLENGE ================= */
+
+.challenge-banner {
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.4;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: fade-slide-in 0.3s ease both;
+}
+
+.challenge-banner.active {
+    background-color: rgba(77, 141, 255, 0.12);
+    border: 1px solid rgba(77, 141, 255, 0.35);
+    color: var(--accent-blue);
+}
+
+.challenge-banner.locked {
+    background-color: rgba(242, 69, 95, 0.12);
+    border: 1px solid rgba(242, 69, 95, 0.35);
+    color: var(--accent-red);
+    animation: pulse-glow-red 2s ease-in-out infinite;
+}
+
+.challenge-banner.complete {
+    background-color: rgba(31, 216, 164, 0.12);
+    border: 1px solid rgba(31, 216, 164, 0.35);
+    color: var(--accent-green);
+}
+
+.challenge-progress-track {
+    height: 8px;
+    border-radius: 4px;
+    background-color: var(--bg-base);
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+}
+
+.challenge-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent-blue), var(--accent-green));
+    transition: width 0.4s ease;
+}
+
+.challenge-table tbody tr.day-complete {
+    background-color: rgba(31, 216, 164, 0.07);
+}
+
+.challenge-table tbody tr.day-current {
+    background-color: rgba(77, 141, 255, 0.1);
+    box-shadow: inset 3px 0 0 var(--accent-blue);
+}
+
+.challenge-table tbody tr.day-locked-future {
+    opacity: 0.5;
+}
+
+.challenge-check {
+    color: var(--accent-green);
+    font-weight: 800;
+    font-size: 1rem;
+}
+
+.challenge-check.pending {
+    color: var(--text-secondary);
+    opacity: 0.4;
+    font-weight: 400;
+}
+
+/* Applied to every buy/auto/arm button on the dashboard while a day's
+   target is locked, so the discipline rule is visible everywhere, not
+   just inside the Challenge card. */
+.challenge-locked-btn {
+    opacity: 0.35 !important;
+    filter: grayscale(0.5);
+    cursor: not-allowed !important;
+    animation: none !important;
 }
 
 /* ================= RESULT MODAL ================= */

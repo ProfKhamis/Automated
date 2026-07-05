@@ -269,6 +269,10 @@ btnBuyBulkOver2.addEventListener('click', () => {
 });
 
 function armBulkOver2() {
+    if (isChallengeLocked()) {
+        logToConsole("[Challenge] Trading is locked until the next trading day.", "error-msg");
+        return;
+    }
     if (!optionsWebSocket || optionsWebSocket.readyState !== WebSocket.OPEN) {
         logToConsole("Error: Real-time stream must be connected before running trades.", "error-msg");
         return;
@@ -437,6 +441,12 @@ btnFetch.addEventListener('click', async () => {
     } catch (e) { logToConsole(e.message, "error-msg"); }
 });
 
+if (btnBuyBEO) {
+    btnBuyBEO.addEventListener("click", executeBulkEvenOddPair);
+} else {
+    console.error("CRITICAL: btn-buy-beo not found in the DOM!");
+}
+
 btnToggleAutoBEO.addEventListener("click", () => {
     if (!optionsWebSocket || optionsWebSocket.readyState !== WebSocket.OPEN) {
         logToConsole("Error: Cannot start automation without an active stream link.", "error-msg");
@@ -505,6 +515,10 @@ function addToLedger(data) {
 }
 
 function startAutoBulkModeBEO() {
+    if (isChallengeLocked()) {
+        logToConsole("[Challenge] Trading is locked until the next trading day.", "error-msg");
+        return;
+    }
     isAutoModeBEO = true;
     totalTradesExecutedBEO = 0; // Reset runtime session counts
     trackingSettledContractsBEO = 0;
@@ -709,6 +723,11 @@ function handleIncomingTickPacket(tickData) {
         patternDigitHistoryDisplay.textContent = recentDigitHistory.join(' ') || '--';
     }
 
+    // Challenge day-lock: freeze every tick-driven auto strategy the moment
+    // today's target has been hit. Manual buy buttons are disabled directly
+    // (see applyChallengeLockToButtons); this covers the automated engines.
+    if (isChallengeLocked()) return;
+
     if (activeTabId === 'tab-pattern-ou' && isAutoTradingPOU && !patternCooldown) {
         const maxAllowed = parseInt(maxTradesPOUInput.value, 10) || 10;
         if (totalTradesExecutedPOU + 1 > maxAllowed) {
@@ -777,6 +796,10 @@ function handleIncomingTickPacket(tickData) {
 
 // --- CONTRACT ORDER PLACEMENT CONTROLLERS ---
 function executeBulkEvenOddPair() {
+    if (isChallengeLocked()) {
+        logToConsole("[Challenge] Trading is locked until the next trading day.", "error-msg");
+        return;
+    }
     if (!optionsWebSocket || optionsWebSocket.readyState !== WebSocket.OPEN) {
         logToConsole("Error: Real-time stream must be connected before running trades.", "error-msg");
         return;
@@ -839,6 +862,10 @@ function executeBulkEvenOddPair() {
     logToConsole(`[Bulk EO Run Status]: ${totalTradesExecutedBEO} / ${maxCap} individual contracts executed.`);
 }
 function executeContractEO() {
+    if (isChallengeLocked()) {
+        logToConsole("[Challenge] Trading is locked until the next trading day.", "error-msg");
+        return;
+    }
     if (!optionsWebSocket) return;
     const symbol = marketDropdown.value;
     const stake = parseFloat(tradeStakeEO.value);
@@ -861,6 +888,10 @@ function executeContractEO() {
 }
 
 function executeBulkOverUnderPair() {
+    if (isChallengeLocked()) {
+        logToConsole("[Challenge] Trading is locked until the next trading day.", "error-msg");
+        return;
+    }
     if (!optionsWebSocket || optionsWebSocket.readyState !== WebSocket.OPEN) {
         logToConsole("Error: Real-time stream must be connected before running trades.", "error-msg");
         return;
@@ -924,6 +955,10 @@ function executeBulkOverUnderPair() {
 }
 
 function executePatternOverUnder(match) {
+    if (isChallengeLocked()) {
+        logToConsole("[Challenge] Trading is locked until the next trading day.", "error-msg");
+        return;
+    }
     if (!optionsWebSocket || optionsWebSocket.readyState !== WebSocket.OPEN) {
         logToConsole("Error: Real-time stream must be connected before running trades.", "error-msg");
         return;
@@ -963,6 +998,10 @@ function executePatternOverUnder(match) {
 
 btnToggleAutoPOU.addEventListener('click', () => toggleAutoPOU(!isAutoTradingPOU));
 function toggleAutoPOU(state) {
+    if (state && isChallengeLocked()) {
+        logToConsole("[Challenge] Trading is locked until the next trading day.", "error-msg");
+        return;
+    }
     isAutoTradingPOU = state;
     btnToggleAutoPOU.textContent = state ? "Stop Pattern Auto-Mode" : "Start Pattern Auto-Mode";
     btnToggleAutoPOU.classList.toggle('stream-active', state);
@@ -1096,6 +1135,7 @@ function handleContractUpdate(contract) {
             totalSessionProfit += profitValue;
             updateSessionProfitUI();
             checkTPSLHit();
+            registerChallengeProfit(profitValue);
         }
     }
 
@@ -1116,6 +1156,10 @@ btnBuyOU.addEventListener('click', executeBulkOverUnderPair);
 
 btnToggleAutoEO.addEventListener('click', () => toggleAutoEO(!isAutoTradingEO));
 function toggleAutoEO(state) {
+    if (state && isChallengeLocked()) {
+        logToConsole("[Challenge] Trading is locked until the next trading day.", "error-msg");
+        return;
+    }
     isAutoTradingEO = state;
     btnToggleAutoEO.textContent = state ? "Stop Auto Mode" : "Start Auto-Mode";
     btnToggleAutoEO.classList.toggle('stream-active', state);
@@ -1125,6 +1169,10 @@ function toggleAutoEO(state) {
 
 btnToggleAutoOU.addEventListener('click', () => toggleAutoOU(!isAutoTradingOU));
 function toggleAutoOU(state) {
+    if (state && isChallengeLocked()) {
+        logToConsole("[Challenge] Trading is locked until the next trading day.", "error-msg");
+        return;
+    }
     isAutoTradingOU = state;
     btnToggleAutoOU.textContent = state ? "Stop Auto Bulk Mode" : "Start Auto Bulk Mode";
     btnToggleAutoOU.classList.toggle('stream-active', state);
@@ -1152,7 +1200,13 @@ let isAutoModeTN = false;
 let totalTradesExecutedTN = 0;
 
 function executeBulkTouchNoTouch() {
-    
+
+    if (isChallengeLocked()) {
+        logToConsole("[Challenge] Trading is locked until the next trading day.", "error-msg");
+        isAutoModeTN = false;
+        return;
+    }
+
     if (!optionsWebSocket || optionsWebSocket.readyState !== WebSocket.OPEN) {
         logToConsole("Error: WebSocket not connected.", "error-msg");
         return;
@@ -1248,6 +1302,295 @@ function logToConsole(message, className = "") {
     logConsole.appendChild(p);
     logConsole.scrollTop = logConsole.scrollHeight;
 }
+
+// ================= 30-DAY COMPOUNDING CHALLENGE =================
+// Discipline layer: once a day's profit target is hit, every buy/auto/arm
+// button on the dashboard locks until the next calendar day. This is
+// intentionally strict -- there is no "unlock early" control, since the
+// whole point is to remove the temptation to keep trading after a win.
+
+const CHALLENGE_STORAGE_KEY = 'we_trade_challenge_v1';
+
+// Every button anywhere on the dashboard that can place or arm a trade.
+const CHALLENGE_LOCK_BUTTON_IDS = [
+    'btn-buy-eo', 'btn-toggle-auto-eo',
+    'btn-buy-ou', 'btn-toggle-auto-ou',
+    'btn-buy-beo', 'btn-toggle-auto-beo',
+    'btn-toggle-auto-pou',
+    'btn-buy-bulk-over2',
+    'btn-buy-tn', 'btn-toggle-auto-tn'
+];
+
+const challengeStartCapitalInput = document.getElementById('challenge-start-capital');
+const challengeGrowthRateInput = document.getElementById('challenge-growth-rate');
+const challengeTotalDaysInput = document.getElementById('challenge-total-days');
+const btnStartChallenge = document.getElementById('btn-start-challenge');
+const btnResetChallenge = document.getElementById('btn-reset-challenge');
+const challengeStatusBanner = document.getElementById('challenge-status-banner');
+const challengeProgressDisplay = document.getElementById('challenge-progress-display');
+const challengeCurrentDayLabel = document.getElementById('challenge-current-day');
+const challengeTotalDaysLabel = document.getElementById('challenge-total-days-label');
+const challengeDayProfitLabel = document.getElementById('challenge-day-profit');
+const challengeDayTargetLabel = document.getElementById('challenge-day-target');
+const challengeProgressFill = document.getElementById('challenge-progress-fill');
+const challengeTableBody = document.getElementById('challenge-table-body');
+
+let challengeRows = [];
+
+function defaultChallengeState() {
+    return {
+        active: false,
+        startCapital: 2.00,
+        growthRate: 0.20,
+        totalDays: 30,
+        currentDay: 1,
+        dayProfit: 0,
+        completedDays: [],
+        lockedDate: null   // set to a date string the moment a day's target is hit
+    };
+}
+
+function loadChallengeState() {
+    try {
+        const raw = localStorage.getItem(CHALLENGE_STORAGE_KEY);
+        if (!raw) return defaultChallengeState();
+        return { ...defaultChallengeState(), ...JSON.parse(raw) };
+    } catch (e) {
+        return defaultChallengeState();
+    }
+}
+
+function saveChallengeState() {
+    try { localStorage.setItem(CHALLENGE_STORAGE_KEY, JSON.stringify(challengeState)); } catch (e) { /* ignore */ }
+}
+
+let challengeState = loadChallengeState();
+
+function buildChallengeRows() {
+    const rows = [];
+    let start = challengeState.startCapital;
+    for (let day = 1; day <= challengeState.totalDays; day++) {
+        const target = start * challengeState.growthRate;
+        const end = start + target;
+        rows.push({ day, start, target, end });
+        start = end;
+    }
+    challengeRows = rows;
+}
+
+function todayStr() {
+    return new Date().toDateString();
+}
+
+// A day counts as "locked" only while it's still today's lock -- the
+// automatic rollover check below clears this the moment the date changes.
+function isChallengeLocked() {
+    return challengeState.active && !!challengeState.lockedDate;
+}
+
+function currentChallengeRow() {
+    return challengeRows.find(r => r.day === challengeState.currentDay) || null;
+}
+
+// Runs on load and on an interval: if we're locked and the calendar date
+// has moved on since the lock was set, automatically advance to the next
+// day and re-enable trading. Nothing needs to be lost/reset except the
+// running profit counter for the new day.
+function checkChallengeDayRollover() {
+    if (!challengeState.active || !challengeState.lockedDate) return;
+    if (challengeState.lockedDate !== todayStr()) {
+        challengeState.currentDay += 1;
+        challengeState.dayProfit = 0;
+        challengeState.lockedDate = null;
+        saveChallengeState();
+        applyChallengeLockToButtons(false);
+        if (challengeState.currentDay <= challengeState.totalDays) {
+            logToConsole(`[Challenge] New trading day \u2014 Day ${challengeState.currentDay} is now unlocked. Good luck.`, "success-msg");
+        } else {
+            logToConsole(`[Challenge] All ${challengeState.totalDays} days complete! Challenge finished.`, "success-msg");
+        }
+        renderChallengeUI();
+    }
+}
+
+// Called every time a contract settles (won or lost) so the day's real
+// trading P/L accrues toward that day's target, exactly like a normal
+// take-profit tracker -- but scoped per day instead of per session.
+function registerChallengeProfit(profitValue) {
+    if (!challengeState.active) {
+        logToConsole(`[Challenge] Contract settled (${profitValue >= 0 ? '+' : ''}${profitValue.toFixed(2)}) but no challenge is running \u2014 click "Start Challenge" to begin tracking.`, "system-msg");
+        return;
+    }
+    if (isChallengeLocked()) {
+        logToConsole(`[Challenge] Contract settled (${profitValue >= 0 ? '+' : ''}${profitValue.toFixed(2)}) but Day ${challengeState.currentDay} is locked \u2014 not counted.`, "system-msg");
+        return;
+    }
+    if (challengeState.currentDay > challengeState.totalDays) return;
+
+    challengeState.dayProfit += profitValue;
+    const row = currentChallengeRow();
+    logToConsole(`[Challenge] Day ${challengeState.currentDay} P/L now $${challengeState.dayProfit.toFixed(2)} of $${row ? row.target.toFixed(2) : '?'} target.`, "system-msg");
+    if (row && challengeState.dayProfit >= row.target) {
+        lockChallengeDay(row);
+    } else {
+        saveChallengeState();
+        renderChallengeUI();
+    }
+}
+
+function lockChallengeDay(row) {
+    if (!challengeState.completedDays.includes(row.day)) {
+        challengeState.completedDays.push(row.day);
+    }
+    challengeState.lockedDate = todayStr();
+    saveChallengeState();
+
+    haltAllAutoModes();
+    applyChallengeLockToButtons(true);
+
+    logToConsole(`[Challenge] Day ${row.day} target of $${row.target.toFixed(2)} reached \u2014 all strategies are now locked until the next trading day.`, "success-msg");
+    renderChallengeUI();
+}
+
+function applyChallengeLockToButtons(locked) {
+    CHALLENGE_LOCK_BUTTON_IDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (locked) {
+            if (el.dataset.preLockDisabled === undefined) {
+                el.dataset.preLockDisabled = el.disabled ? "1" : "0";
+            }
+            el.disabled = true;
+            el.classList.add('challenge-locked-btn');
+        } else {
+            el.classList.remove('challenge-locked-btn');
+            if (el.dataset.preLockDisabled === "0") el.disabled = false;
+            delete el.dataset.preLockDisabled;
+        }
+    });
+}
+
+function startChallenge() {
+    const start = parseFloat(challengeStartCapitalInput.value) || 2;
+    const rate = (parseFloat(challengeGrowthRateInput.value) || 20) / 100;
+    const days = parseInt(challengeTotalDaysInput.value, 10) || 30;
+
+    challengeState = {
+        active: true,
+        startCapital: start,
+        growthRate: rate,
+        totalDays: days,
+        currentDay: 1,
+        dayProfit: 0,
+        completedDays: [],
+        lockedDate: null
+    };
+    saveChallengeState();
+    buildChallengeRows();
+
+    challengeStartCapitalInput.disabled = true;
+    challengeGrowthRateInput.disabled = true;
+    challengeTotalDaysInput.disabled = true;
+    btnStartChallenge.disabled = true;
+
+    logToConsole(`[Challenge] Started: $${start.toFixed(2)} start capital, ${(rate * 100).toFixed(0)}% daily target, over ${days} days.`, "success-msg");
+    renderChallengeUI();
+}
+
+function resetChallenge() {
+    if (!confirm("Restart the challenge from Day 1? All progress and ticks will be cleared.")) return;
+    challengeState = defaultChallengeState();
+    saveChallengeState();
+    buildChallengeRows();
+
+    challengeStartCapitalInput.disabled = false;
+    challengeGrowthRateInput.disabled = false;
+    challengeTotalDaysInput.disabled = false;
+    btnStartChallenge.disabled = false;
+    applyChallengeLockToButtons(false);
+
+    logToConsole("[Challenge] Reset. Configure your targets and start again whenever you're ready.", "system-msg");
+    renderChallengeUI();
+}
+
+function renderChallengeUI() {
+    if (!challengeTableBody) return;
+    if (challengeRows.length === 0) buildChallengeRows();
+
+    if (challengeState.active) {
+        challengeStartCapitalInput.value = challengeState.startCapital.toFixed(2);
+        challengeGrowthRateInput.value = (challengeState.growthRate * 100).toFixed(0);
+        challengeTotalDaysInput.value = challengeState.totalDays;
+        challengeStartCapitalInput.disabled = true;
+        challengeGrowthRateInput.disabled = true;
+        challengeTotalDaysInput.disabled = true;
+        btnStartChallenge.disabled = true;
+    }
+
+    challengeTableBody.innerHTML = '';
+    challengeRows.forEach(row => {
+        const tr = document.createElement('tr');
+        const isDone = challengeState.completedDays.includes(row.day);
+        const isCurrent = challengeState.active && row.day === challengeState.currentDay;
+        if (isDone) tr.classList.add('day-complete');
+        if (isCurrent) tr.classList.add('day-current');
+        if (challengeState.active && row.day > challengeState.currentDay) tr.classList.add('day-locked-future');
+
+        tr.innerHTML = `
+            <td>${row.day}</td>
+            <td>$${row.start.toFixed(2)}</td>
+            <td>$${row.target.toFixed(2)}</td>
+            <td>$${row.end.toFixed(2)}</td>
+            <td style="text-align:center;">
+                <span class="challenge-check ${isDone ? '' : 'pending'}">${isDone ? '\u2714' : '\u2014'}</span>
+            </td>
+        `;
+        challengeTableBody.appendChild(tr);
+    });
+
+    if (!challengeState.active) {
+        challengeStatusBanner.style.display = 'none';
+        challengeProgressDisplay.style.display = 'none';
+        return;
+    }
+
+    challengeStatusBanner.style.display = 'flex';
+
+    if (challengeState.currentDay > challengeState.totalDays) {
+        challengeStatusBanner.className = 'challenge-banner complete';
+        challengeStatusBanner.textContent = `\uD83C\uDFC1 Challenge complete \u2014 all ${challengeState.totalDays} days hit their target.`;
+        challengeProgressDisplay.style.display = 'none';
+        return;
+    }
+
+    challengeProgressDisplay.style.display = 'flex';
+    const row = currentChallengeRow();
+    challengeCurrentDayLabel.textContent = challengeState.currentDay;
+    challengeTotalDaysLabel.textContent = challengeState.totalDays;
+    challengeDayProfitLabel.textContent = challengeState.dayProfit.toFixed(2);
+    challengeDayTargetLabel.textContent = row ? row.target.toFixed(2) : '0.00';
+    const pct = row ? Math.max(0, Math.min(100, (challengeState.dayProfit / row.target) * 100)) : 0;
+    if (challengeProgressFill) challengeProgressFill.style.width = `${pct}%`;
+
+    if (isChallengeLocked()) {
+        challengeStatusBanner.className = 'challenge-banner locked';
+        challengeStatusBanner.textContent = `\uD83D\uDD12 Day ${challengeState.currentDay} target hit \u2014 trading is locked until the next trading day.`;
+    } else {
+        challengeStatusBanner.className = 'challenge-banner active';
+        challengeStatusBanner.textContent = `Day ${challengeState.currentDay} in progress \u2014 target is $${row ? row.target.toFixed(2) : '0.00'}.`;
+    }
+}
+
+if (btnStartChallenge) btnStartChallenge.addEventListener('click', startChallenge);
+if (btnResetChallenge) btnResetChallenge.addEventListener('click', resetChallenge);
+
+// Bootstrapping: rebuild the table from whatever state persisted, catch up
+// on any day rollovers that happened while the tab was closed, then paint.
+buildChallengeRows();
+checkChallengeDayRollover();
+if (challengeState.active) applyChallengeLockToButtons(isChallengeLocked());
+renderChallengeUI();
+setInterval(checkChallengeDayRollover, 60 * 1000);
 
 // --- QUICK NAV SCROLLSPY (purely cosmetic, fully self-guarded) ---
 // Highlights whichever section is currently in view so the sticky
