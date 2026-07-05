@@ -85,7 +85,11 @@ let isTPSLArmed = false;
 const btnBuyBulkOver2 = document.getElementById('btn-buy-bulk-over2');
 const tradeStakeOver2 = document.getElementById('trade-stake-over2');
 const tradeDurationOver2 = document.getElementById('trade-duration-over2');
+const triggerModeOver2Select = document.getElementById('trigger-mode-over2');
 const triggerDigitOver2Input = document.getElementById('trigger-digit-over2');
+const triggerDigitLabelOver2 = document.getElementById('trigger-digit-label-over2');
+const triggerDigit2Over2Input = document.getElementById('trigger-digit-2-over2');
+const triggerDigit2WrapperOver2 = document.getElementById('trigger-digit-2-wrapper-over2');
 const contractsPerTriggerOver2Input = document.getElementById('contracts-per-trigger-over2');
 const maxTriggersOver2Input = document.getElementById('max-triggers-over2');
 const overBarrierOver2Input = document.getElementById('over-barrier-over2');
@@ -113,6 +117,23 @@ function matchDigitPattern(history) {
     return DIGIT_PATTERNS.find(p =>
         (a === p.digits[0] && b === p.digits[1]) || (a === p.digits[1] && b === p.digits[0])
     ) || null;
+}
+
+// Generic "did these two digits land back-to-back, in either order" check --
+// shared by the Bulk Over trigger's Two-Digit Sequence mode.
+function matchConsecutivePair(history, digitA, digitB) {
+    if (history.length < 2) return false;
+    const [a, b] = history;
+    return (a === digitA && b === digitB) || (a === digitB && b === digitA);
+}
+
+// Toggle the second trigger-digit field depending on the chosen mode.
+if (triggerModeOver2Select) {
+    triggerModeOver2Select.addEventListener('change', () => {
+        const isDouble = triggerModeOver2Select.value === 'double';
+        if (triggerDigit2WrapperOver2) triggerDigit2WrapperOver2.style.display = isDouble ? 'flex' : 'none';
+        if (triggerDigitLabelOver2) triggerDigitLabelOver2.textContent = isDouble ? "First Trigger Digit (0-9):" : "Trigger Digit (0-9):";
+    });
 }
 
 // --- TAKE PROFIT / STOP LOSS ---
@@ -213,14 +234,20 @@ function disarmTPSL() {
     slTargetInput.disabled = false;
 }
 
-btnToggleTPSL.addEventListener('click', () => {
-    if (isTPSLArmed) {
-        disarmTPSL();
-        logToConsole("[TP/SL] Disarmed by user.");
-    } else {
-        armTPSL();
-    }
-});
+// TP/SL controls were removed from the UI, so guard this listener --
+// the rest of the TP/SL logic above stays inert (isTPSLArmed never
+// flips true) which keeps checkTPSLHit()/haltAllAutoModes() call sites
+// throughout the file safe without touching them.
+if (btnToggleTPSL) {
+    btnToggleTPSL.addEventListener('click', () => {
+        if (isTPSLArmed) {
+            disarmTPSL();
+            logToConsole("[TP/SL] Disarmed by user.");
+        } else {
+            armTPSL();
+        }
+    });
+}
 
 function haltAllAutoModes() {
     if (isAutoTradingEO) toggleAutoEO(false);
@@ -254,13 +281,19 @@ function armBulkOver2() {
     btnBuyBulkOver2.classList.add('stream-active');
     tradeStakeOver2.disabled = true;
     tradeDurationOver2.disabled = true;
+    if (triggerModeOver2Select) triggerModeOver2Select.disabled = true;
     triggerDigitOver2Input.disabled = true;
+    if (triggerDigit2Over2Input) triggerDigit2Over2Input.disabled = true;
     contractsPerTriggerOver2Input.disabled = true;
     maxTriggersOver2Input.disabled = true;
     overBarrierOver2Input.disabled = true;
     if (over2RunProgressDisplay) over2RunProgressDisplay.textContent = `0 / ${maxTriggersOver2Input.value}`;
 
-    logToConsole(`[Bulk Over] Armed. Watching for digit ${triggerDigitOver2Input.value} -- will buy ${contractsPerTriggerOver2Input.value} Over ${overBarrierOver2Input.value} contracts each time it appears.`, "success-msg");
+    const isDouble = triggerModeOver2Select && triggerModeOver2Select.value === 'double';
+    const watchDesc = isDouble
+        ? `digits ${triggerDigitOver2Input.value} & ${triggerDigit2Over2Input.value} landing back-to-back`
+        : `digit ${triggerDigitOver2Input.value}`;
+    logToConsole(`[Bulk Over] Armed. Watching for ${watchDesc} -- will buy ${contractsPerTriggerOver2Input.value} Over ${overBarrierOver2Input.value} contracts each time it fires.`, "success-msg");
 }
 
 function disarmBulkOver2() {
@@ -269,7 +302,9 @@ function disarmBulkOver2() {
     btnBuyBulkOver2.classList.remove('stream-active');
     tradeStakeOver2.disabled = false;
     tradeDurationOver2.disabled = false;
+    if (triggerModeOver2Select) triggerModeOver2Select.disabled = false;
     triggerDigitOver2Input.disabled = false;
+    if (triggerDigit2Over2Input) triggerDigit2Over2Input.disabled = false;
     contractsPerTriggerOver2Input.disabled = false;
     maxTriggersOver2Input.disabled = false;
     overBarrierOver2Input.disabled = false;
@@ -327,6 +362,20 @@ function fireBulkOver2Batch() {
 }
 
 // --- TAB NAVIGATION LOGIC ---
+const dashboardContainer = document.querySelector('.dashboard-container');
+const focusBar = document.getElementById('focus-bar');
+const btnExitFocus = document.getElementById('btn-exit-focus');
+
+function enterFocusMode() {
+    if (dashboardContainer) dashboardContainer.classList.add('focus-mode');
+    if (focusBar) focusBar.style.display = 'flex';
+}
+
+function exitFocusMode() {
+    if (dashboardContainer) dashboardContainer.classList.remove('focus-mode');
+    if (focusBar) focusBar.style.display = 'none';
+}
+
 document.querySelectorAll('.tab-btn').forEach(button => {
     button.addEventListener('click', () => {
         if (isAutoTradingEO) toggleAutoEO(false);
@@ -334,13 +383,31 @@ document.querySelectorAll('.tab-btn').forEach(button => {
         if (isAutoTradingPOU) toggleAutoPOU(false);
         if (isBulkOver2Armed) disarmBulkOver2();
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
 
         button.classList.add('active');
         activeTabId = button.getAttribute('data-target');
         document.getElementById(activeTabId).classList.add('active');
-        
+
+        // Tapping a strategy narrows the view down to just that strategy
+        // and the Ledger, so both can be watched together.
+        enterFocusMode();
+
         logToConsole(`Switched View: ${button.textContent}`, "system-msg");
     });
+});
+
+if (btnExitFocus) {
+    btnExitFocus.addEventListener('click', exitFocusMode);
+}
+
+// Jumping to Setup / Market / Logs via the quick nav should reveal them
+// again first -- they're tucked away while focus mode is active.
+document.querySelectorAll('.quick-nav-link').forEach(link => {
+    const target = link.getAttribute('href');
+    if (target === '#section-setup' || target === '#section-market' || target === '#section-logs') {
+        link.addEventListener('click', exitFocusMode);
+    }
 });
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -660,9 +727,20 @@ function handleIncomingTickPacket(tickData) {
     }
 
     if (activeTabId === 'tab-bulk-ou' && isBulkOver2Armed && !bulkOver2Cooldown) {
-        const triggerDigit = parseInt(triggerDigitOver2Input.value, 10);
-        if (lastDigit === triggerDigit) {
-            fireBulkOver2Batch();
+        const isDoubleMode = triggerModeOver2Select && triggerModeOver2Select.value === 'double';
+        if (isDoubleMode) {
+            const digitA = parseInt(triggerDigitOver2Input.value, 10);
+            const digitB = parseInt(triggerDigit2Over2Input.value, 10);
+            if (matchConsecutivePair(recentDigitHistory, digitA, digitB)) {
+                fireBulkOver2Batch();
+                // Reset history so the same two digits can't immediately re-trigger the next tick
+                recentDigitHistory = [];
+            }
+        } else {
+            const triggerDigit = parseInt(triggerDigitOver2Input.value, 10);
+            if (lastDigit === triggerDigit) {
+                fireBulkOver2Batch();
+            }
         }
     }
 
@@ -1170,3 +1248,32 @@ function logToConsole(message, className = "") {
     logConsole.appendChild(p);
     logConsole.scrollTop = logConsole.scrollHeight;
 }
+
+// --- QUICK NAV SCROLLSPY (purely cosmetic, fully self-guarded) ---
+// Highlights whichever section is currently in view so the sticky
+// top nav reflects scroll position instead of just being static links.
+(function initQuickNavScrollspy() {
+    const navLinks = document.querySelectorAll('.quick-nav-link');
+    if (!navLinks.length) return;
+
+    const targets = Array.from(navLinks)
+        .map(link => document.querySelector(link.getAttribute('href')))
+        .filter(Boolean);
+
+    if (!targets.length || !('IntersectionObserver' in window)) return;
+
+    const linkFor = (id) => document.querySelector(`.quick-nav-link[href="#${id}"]`);
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            const link = linkFor(entry.target.id);
+            if (!link) return;
+            if (entry.isIntersecting) {
+                navLinks.forEach(l => l.classList.remove('active'));
+                link.classList.add('active');
+            }
+        });
+    }, { rootMargin: '-45% 0px -50% 0px' });
+
+    targets.forEach(t => observer.observe(t));
+})();
