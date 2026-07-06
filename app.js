@@ -180,13 +180,13 @@ function checkTPSLHit() {
 function showTPSLModal(isWin, amount) {
     if (!tpslModalOverlay) return;
     if (isWin) {
-        tpslModalIcon.textContent = "🎉";
+        tpslModalIcon.textContent = "";
         tpslModalTitle.textContent = "Take Profit Hit!";
         tpslModalMessage.textContent = "Nice work — you hit your session take profit target. Consider calling it here.";
         tpslModalAmount.textContent = `+${amount.toFixed(2)} USD`;
         tpslModalAmount.className = "modal-amount win";
     } else {
-        tpslModalIcon.textContent = "🛑";
+        tpslModalIcon.textContent = "";
         tpslModalTitle.textContent = "Stop Loss Hit";
         tpslModalMessage.textContent = "Your session stop loss was reached, so auto-trading has been halted to protect your balance.";
         tpslModalAmount.textContent = `${amount.toFixed(2)} USD`;
