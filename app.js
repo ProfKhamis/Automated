@@ -673,78 +673,95 @@ function subscribeToSymbolTicks(symbolCode) {
 // --- AUTO ENGINE RUNNER AND TICK PROCESSING ---
 function handleIncomingTickPacket(tickData) {
     if (!tickData || !tickData.quote) return;
+
+    // --- HOT PATH: compute the digit and fire any armed trade decisions
+    // BEFORE touching the DOM. JS is single-threaded, so whatever runs
+    // first here truly runs first - UI writes must not sit in front of send().
     const priceString = tickData.quote.toString();
     const lastDigit = parseInt(priceString.charAt(priceString.length - 1), 10);
-    
-    liveTickValue.textContent = tickData.quote.toLocaleString(undefined, { minimumFractionDigits: 2 });
-    liveDigitValue.textContent = lastDigit;
+
     recentDigitHistory.push(lastDigit);
     if (recentDigitHistory.length > 2) recentDigitHistory.shift();
+
+    let patternFired = false;
+    let stopAutoPOU = false;
+    let patternMatch = null;
+
+    if (!isChallengeLocked()) {
+        if (activeTabId === 'tab-pattern-ou' && isAutoTradingPOU && !patternCooldown) {
+            const maxAllowed = parseInt(maxTradesPOUInput.value, 10) || 10;
+            if (totalTradesExecutedPOU + 1 > maxAllowed) {
+                stopAutoPOU = true;
+            } else {
+                const match = matchDigitPattern(recentDigitHistory);
+                if (match) {
+                    patternMatch = match;
+                    executePatternOverUnder(match);
+                    recentDigitHistory = [];
+                    patternFired = true;
+                }
+            }
+        }
+
+        if (activeTabId === 'tab-bulk-ou' && isBulkOver2Armed && !bulkOver2Cooldown) {
+            const isDoubleMode = triggerModeOver2Select && triggerModeOver2Select.value === 'double';
+            if (isDoubleMode) {
+                const digitA = parseInt(triggerDigitOver2Input.value, 10);
+                const digitB = parseInt(triggerDigit2Over2Input.value, 10);
+                if (matchConsecutivePair(recentDigitHistory, digitA, digitB)) {
+                    fireBulkOver2Batch();
+                    recentDigitHistory = [];
+                }
+            } else {
+                const triggerDigit = parseInt(triggerDigitOver2Input.value, 10);
+                if (lastDigit === triggerDigit) {
+                    fireBulkOver2Batch();
+                }
+            }
+        }
+
+        if (activeTabId === 'tab-even-odd' && isAutoTradingEO) {
+            const isEven = lastDigit % 2 === 0;
+            const selectedMode = strategyModeEO.value;
+            if ((selectedMode === "DIGITEVEN" && isEven) || (selectedMode === "DIGITODD" && !isEven)) {
+                executeContractEO();
+            }
+        }
+        else if (activeTabId === 'tab-bulk-ou' && isAutoTradingOU && !autoBulkCooldown) {
+            const maxAllowed = parseInt(maxTradesOUInput.value, 10) || 10;
+            if (totalTradesExecutedOU + 2 > maxAllowed) {
+                logToConsole(`[Bot Auto Stop] Max trade cap reached (${totalTradesExecutedOU}/${maxAllowed}). Stopping execution.`, "system-msg");
+                toggleAutoOU(false);
+            } else {
+                executeBulkOverUnderPair();
+
+                const durationTicks = parseInt(tradeDurationOU.value, 10);
+                autoBulkCooldown = true;
+                btnBuyOU.disabled = true;
+
+                setTimeout(() => {
+                    autoBulkCooldown = false;
+                    if (!isAutoTradingOU) btnBuyOU.disabled = false;
+                }, (durationTicks * 2000) + 1200);
+
+                logToConsole(`[Bulk Auto Triggered] Firing paired strategy...`, "system-msg");
+            }
+        }
+    }
+
+    // --- COLD PATH: pure display work, safe to run after the trade is sent.
+    liveTickValue.textContent = tickData.quote.toLocaleString(undefined, { minimumFractionDigits: 2 });
+    liveDigitValue.textContent = lastDigit;
     if (patternDigitHistoryDisplay) {
         patternDigitHistoryDisplay.textContent = recentDigitHistory.join(' ') || '--';
     }
-
-    if (isChallengeLocked()) return;
-
-    if (activeTabId === 'tab-pattern-ou' && isAutoTradingPOU && !patternCooldown) {
-        const maxAllowed = parseInt(maxTradesPOUInput.value, 10) || 10;
-        if (totalTradesExecutedPOU + 1 > maxAllowed) {
-            logToConsole(`[Pattern OU] Max trade cap reached (${totalTradesExecutedPOU}/${maxAllowed}). Stopping execution.`, "system-msg");
-            toggleAutoPOU(false);
-        } else {
-            const match = matchDigitPattern(recentDigitHistory);
-            if (match) {
-                logToConsole(`[Pattern OU] Detected ${recentDigitHistory.join(',')} -> firing ${match.label}`, "success-msg");
-                if (patternLastMatchDisplay) patternLastMatchDisplay.textContent = `${match.label} @ ${new Date().toLocaleTimeString()}`;
-                executePatternOverUnder(match);
-                recentDigitHistory = [];
-            }
-        }
+    if (stopAutoPOU) {
+        logToConsole(`[Pattern OU] Max trade cap reached (${totalTradesExecutedPOU}/${parseInt(maxTradesPOUInput.value, 10) || 10}). Stopping execution.`, "system-msg");
+        toggleAutoPOU(false);
     }
-
-    if (activeTabId === 'tab-bulk-ou' && isBulkOver2Armed && !bulkOver2Cooldown) {
-        const isDoubleMode = triggerModeOver2Select && triggerModeOver2Select.value === 'double';
-        if (isDoubleMode) {
-            const digitA = parseInt(triggerDigitOver2Input.value, 10);
-            const digitB = parseInt(triggerDigit2Over2Input.value, 10);
-            if (matchConsecutivePair(recentDigitHistory, digitA, digitB)) {
-                fireBulkOver2Batch();
-                recentDigitHistory = [];
-            }
-        } else {
-            const triggerDigit = parseInt(triggerDigitOver2Input.value, 10);
-            if (lastDigit === triggerDigit) {
-                fireBulkOver2Batch();
-            }
-        }
-    }
-
-    if (activeTabId === 'tab-even-odd' && isAutoTradingEO) {
-        const isEven = lastDigit % 2 === 0;
-        const selectedMode = strategyModeEO.value;
-        if ((selectedMode === "DIGITEVEN" && isEven) || (selectedMode === "DIGITODD" && !isEven)) {
-            executeContractEO();
-        }
-    } 
-    else if (activeTabId === 'tab-bulk-ou' && isAutoTradingOU && !autoBulkCooldown) {
-        const maxAllowed = parseInt(maxTradesOUInput.value, 10) || 10;       
-        if (totalTradesExecutedOU + 2 > maxAllowed) {
-            logToConsole(`[Bot Auto Stop] Max trade cap reached (${totalTradesExecutedOU}/${maxAllowed}). Stopping execution.`, "system-msg");
-            toggleAutoOU(false);
-            return;
-        }
-
-        logToConsole(`[Bulk Auto Triggered] Firing paired strategy...`, "system-msg");
-        executeBulkOverUnderPair();
-        
-        const durationTicks = parseInt(tradeDurationOU.value, 10);
-        autoBulkCooldown = true;
-        btnBuyOU.disabled = true; 
-        
-        setTimeout(() => {
-            autoBulkCooldown = false;
-            if(!isAutoTradingOU) btnBuyOU.disabled = false;
-        }, (durationTicks * 2000) + 1200); 
+    if (patternFired && patternMatch) {
+        logToConsole(`[Pattern OU] Detected pattern -> firing ${patternMatch.label}`, "success-msg");
+        if (patternLastMatchDisplay) patternLastMatchDisplay.textContent = `${patternMatch.label} @ ${new Date().toLocaleTimeString()}`;
     }
 }
 
@@ -893,11 +910,11 @@ function executeBulkOverUnderPair() {
         "passthrough": { "bulkRunId": bulkRunToken }
     };
 
-    logToConsole(`[${bulkRunToken}] Synchronizing parallel execution parameters...`);
     optionsWebSocket.send(JSON.stringify(payloadOver));
     optionsWebSocket.send(JSON.stringify(payloadUnder));
-
     totalTradesExecutedOU += 2;
+
+    logToConsole(`[${bulkRunToken}] Paired Over/Under sent.`);
 }
 
 function executePatternOverUnder(match) {
@@ -966,7 +983,7 @@ function toggleAutoPOU(state) {
     }
 }
 
-// --- PORTFOLIO LEDGER DOM DATA HYDRATION ---
+// ---  LEDGER DOM DATA  ---
 function handlePurchaseReceipt(buyReceipt, passthrough) {
     if (!buyReceipt || !buyReceipt.contract_id) return;
     logToConsole(`[Receipt] ID: ${buyReceipt.contract_id} | ${buyReceipt.shortcode}`, "success-msg");
@@ -1241,7 +1258,7 @@ function logToConsole(message, className = "") {
     logConsole.scrollTop = logConsole.scrollHeight;
 }
 
-// ================= 30-DAY CHALLENGE =================
+// CHALLENGE 
 const CHALLENGE_STORAGE_KEY = 'we_trade_challenge_v1';
 const CHALLENGE_LOCK_BUTTON_IDS = [
     'btn-buy-eo', 'btn-toggle-auto-eo',
