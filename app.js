@@ -1,19 +1,12 @@
 const BASE_URL = 'https://api.derivws.com';
 let accountList = [];
 let optionsWebSocket = null;
-
-
-// Global Session P/L Tracker
 let totalSessionProfit = 0;
 const sessionProfitDisplay = document.getElementById("session-profit-display"); // We will create this in HTML
-
-// ACTIVE STRATEGY STATE VARS
 let activeTabId = 'tab-even-odd';
 let isAutoTradingEO = false;
 let isAutoTradingOU = false;
 let autoBulkCooldown = false; 
-
-// COUNTER STATE TRACKING
 let totalTradesExecutedOU = 0; 
 
 // DOM Bindings - Core & UI elements
@@ -29,7 +22,7 @@ const currencyText = document.getElementById('active-currency');
 const badge = document.getElementById('account-type-badge');
 const logConsole = document.getElementById('log-console');
 
-// DOM Bindings - Telemetry
+// DOM Bindings - Market Data
 const marketPanel = document.getElementById('market-data-panel');
 const marketDropdown = document.getElementById('market-dropdown');
 const liveTickValue = document.getElementById('live-tick-value');
@@ -49,6 +42,7 @@ let totalTradesExecutedBEO = 0;
 const btnToggleAutoBEO = document.getElementById("btn-toggle-auto-beo");
 let isAutoModeBEO = false;
 let trackingSettledContractsBEO = 0;
+
 // DOM Bindings - Strategy 2 (OU)
 const btnBuyOU = document.getElementById('btn-buy-ou');
 const btnToggleAutoOU = document.getElementById('btn-toggle-auto-ou');
@@ -97,15 +91,11 @@ const over2RunProgressDisplay = document.getElementById('over2-run-progress');
 let isBulkOver2Armed = false;
 let bulkOver2TriggersFired = 0;
 let bulkOver2Cooldown = false;
-
-// PATTERN OU STATE
 let isAutoTradingPOU = false;
 let totalTradesExecutedPOU = 0;
 let patternCooldown = false;
-let recentDigitHistory = []; // rolling window of the last 2 tick digits
+let recentDigitHistory = []; 
 
-// Pattern definitions: any two-tick sequence containing this digit pair (in either order)
-// triggers the paired contract_type/barrier below.
 const DIGIT_PATTERNS = [
     { digits: [1, 2], contract_type: 'DIGITOVER', barrier: '2', label: 'Over 2 (1\u2194 2 pattern)' },
     { digits: [7, 8], contract_type: 'DIGITUNDER', barrier: '7', label: 'Under 7 (7\u2194 8 pattern)' }
@@ -119,15 +109,12 @@ function matchDigitPattern(history) {
     ) || null;
 }
 
-// Generic "did these two digits land back-to-back, in either order" check --
-// shared by the Bulk Over trigger's Two-Digit Sequence mode.
 function matchConsecutivePair(history, digitA, digitB) {
     if (history.length < 2) return false;
     const [a, b] = history;
     return (a === digitA && b === digitB) || (a === digitB && b === digitA);
 }
 
-// Toggle the second trigger-digit field depending on the chosen mode.
 if (triggerModeOver2Select) {
     triggerModeOver2Select.addEventListener('change', () => {
         const isDouble = triggerModeOver2Select.value === 'double';
@@ -160,7 +147,6 @@ function updateTPSLProgressBar() {
         return;
     }
 
-    // Bar center (50%) = 0 P/L. Right edge (100%) = +TP. Left edge (0%) = -SL.
     let halfWidthPct;
     if (totalSessionProfit >= 0) {
         halfWidthPct = tpTarget > 0 ? Math.min(totalSessionProfit / tpTarget, 1) * 50 : 0;
@@ -233,11 +219,6 @@ function disarmTPSL() {
     tpTargetInput.disabled = false;
     slTargetInput.disabled = false;
 }
-
-// TP/SL controls were removed from the UI, so guard this listener --
-// the rest of the TP/SL logic above stays inert (isTPSLArmed never
-// flips true) which keeps checkTPSLHit()/haltAllAutoModes() call sites
-// throughout the file safe without touching them.
 if (btnToggleTPSL) {
     btnToggleTPSL.addEventListener('click', () => {
         if (isTPSLArmed) {
@@ -259,7 +240,7 @@ function haltAllAutoModes() {
     logToConsole("[Risk Management] All auto-trading modes halted.", "error-msg");
 }
 
-// --- BULK OVER 2 (digit-trigger batch buyer) ---
+// --- BULK OVER 2 BUYING IN BATCHES KIJANA---
 btnBuyBulkOver2.addEventListener('click', () => {
     if (isBulkOver2Armed) {
         disarmBulkOver2();
@@ -361,7 +342,6 @@ function fireBulkOver2Batch() {
         return;
     }
 
-    // Short cooldown so one tick's trigger doesn't fire the batch more than once
     bulkOver2Cooldown = true;
     setTimeout(() => { bulkOver2Cooldown = false; }, (duration * 2000) + 500);
 }
@@ -393,9 +373,6 @@ document.querySelectorAll('.tab-btn').forEach(button => {
         button.classList.add('active');
         activeTabId = button.getAttribute('data-target');
         document.getElementById(activeTabId).classList.add('active');
-
-        // Tapping a strategy narrows the view down to just that strategy
-        // and the Ledger, so both can be watched together.
         enterFocusMode();
 
         logToConsole(`Switched View: ${button.textContent}`, "system-msg");
@@ -406,8 +383,6 @@ if (btnExitFocus) {
     btnExitFocus.addEventListener('click', exitFocusMode);
 }
 
-// Jumping to Setup / Market / Logs via the quick nav should reveal them
-// again first -- they're tucked away while focus mode is active.
 document.querySelectorAll('.quick-nav-link').forEach(link => {
     const target = link.getAttribute('href');
     if (target === '#section-setup' || target === '#section-market' || target === '#section-logs') {
@@ -469,10 +444,7 @@ document.getElementById("btn-clear-ledger").addEventListener("click", () => {
         return;
     }
 
-    // 1. Remove all existing content
     ledgerBody.innerHTML = '';
-
-    // 2. Explicitly create the empty row element
     const emptyRow = document.createElement('tr');
     emptyRow.id = 'ledger-empty-row';
     emptyRow.innerHTML = `
@@ -480,11 +452,7 @@ document.getElementById("btn-clear-ledger").addEventListener("click", () => {
             No bulk operations logged in this session yet.
         </td>
     `;
-
-    // 3. Append it
     ledgerBody.appendChild(emptyRow);
-
-    // 4. Reset your stats
     totalTradesExecutedTN = 0;
     if (typeof totalSessionProfit !== 'undefined') {
         totalSessionProfit = 0;
@@ -497,13 +465,11 @@ document.getElementById("btn-clear-ledger").addEventListener("click", () => {
 function addToLedger(data) {
     const ledgerBody = document.getElementById("ledger-body");
     const emptyRow = document.getElementById("ledger-empty-row");
-
-    // 1. If the empty row exists, remove it before adding the new trade
     if (emptyRow) {
-        ledgerBody.innerHTML = ""; // This wipes the "No operations" text clean
+        ledgerBody.innerHTML = ""; 
     }
 
-    // 2. Create the new row
+    // 2. Creating a new row
     const row = document.createElement("tr");
     row.innerHTML = `
         <td>${data.type}</td>
@@ -511,7 +477,6 @@ function addToLedger(data) {
         <td style="text-align: right;">${data.price}</td>
     `;
 
-    // 3. Add the row to the table
     ledgerBody.appendChild(row);
 }
 
@@ -521,23 +486,21 @@ function startAutoBulkModeBEO() {
         return;
     }
     isAutoModeBEO = true;
-    totalTradesExecutedBEO = 0; // Reset runtime session counts
+    totalTradesExecutedBEO = 0; 
     trackingSettledContractsBEO = 0;
     
     btnToggleAutoBEO.textContent = "Stop Auto Mode";
-    btnToggleAutoBEO.style.backgroundColor = "#ff3b30"; // Warning red
+    btnToggleAutoBEO.style.backgroundColor = "#ff3b30"; 
     btnToggleAutoBEO.style.color = "#ffffff";
     
     logToConsole("[Auto Engine] Bulk Even/Odd Automation Started...", "success-msg");
-    
-    // Fire the initial sequence instantly
     executeBulkEvenOddPair();
 }
 
 function stopAutoBulkModeBEO() {
     isAutoModeBEO = false;
     btnToggleAutoBEO.textContent = "Start Auto Bulk Mode";
-    btnToggleAutoBEO.style.backgroundColor = ""; // Reverts to system styles
+    btnToggleAutoBEO.style.backgroundColor = ""; 
     btnToggleAutoBEO.style.color = "";
     logToConsole("[Auto Engine] Bulk Even/Odd Automation Stopped by user request.");
 }
@@ -574,8 +537,8 @@ if (selected.account_type === 'demo') {
     logToConsole(`Switched active context to: ${accountId}`);
 }
 
-/**
- * 2. Reset Demo Account Balance (POST)
+/*
+ Reset Demo Account Balance (POST /trading/v1/options/accounts/{account_id}/reset-demo-balance)
  */
 btnResetBalance.addEventListener('click', async () => {
     const token = tokenInput.value.trim();
@@ -665,7 +628,6 @@ optionsWebSocket.onmessage = (event) => {
         logToConsole("Balance reset successful!", "success-msg");
         optionsWebSocket.send(JSON.stringify({ "balance": 1, "subscribe": 1 }));
     } else if (incoming.msg_type === "balance") {
-        // Assuming you have a function to update your UI balance
         updateBalanceUI(incoming.balance);
     }
     if (incoming.msg_type === "active_symbols") {
@@ -675,7 +637,6 @@ optionsWebSocket.onmessage = (event) => {
     } else if (incoming.msg_type === "buy") {
         handlePurchaseReceipt(incoming.buy, incoming.passthrough);
     } else if (incoming.msg_type === "proposal_open_contract") {
-        // REQUIREMENT 1: Properly route the streaming response object
         handleContractUpdate(incoming.proposal_open_contract);
     }
 };
@@ -717,17 +678,12 @@ function handleIncomingTickPacket(tickData) {
     
     liveTickValue.textContent = tickData.quote.toLocaleString(undefined, { minimumFractionDigits: 2 });
     liveDigitValue.textContent = lastDigit;
-
-    // Maintain a rolling 2-tick window for the Pattern Over/Under strategy
     recentDigitHistory.push(lastDigit);
     if (recentDigitHistory.length > 2) recentDigitHistory.shift();
     if (patternDigitHistoryDisplay) {
         patternDigitHistoryDisplay.textContent = recentDigitHistory.join(' ') || '--';
     }
 
-    // Challenge day-lock: freeze every tick-driven auto strategy the moment
-    // today's target has been hit. Manual buy buttons are disabled directly
-    // (see applyChallengeLockToButtons); this covers the automated engines.
     if (isChallengeLocked()) return;
 
     if (activeTabId === 'tab-pattern-ou' && isAutoTradingPOU && !patternCooldown) {
@@ -741,7 +697,6 @@ function handleIncomingTickPacket(tickData) {
                 logToConsole(`[Pattern OU] Detected ${recentDigitHistory.join(',')} -> firing ${match.label}`, "success-msg");
                 if (patternLastMatchDisplay) patternLastMatchDisplay.textContent = `${match.label} @ ${new Date().toLocaleTimeString()}`;
                 executePatternOverUnder(match);
-                // Reset history so the same two digits can't immediately re-trigger the next tick
                 recentDigitHistory = [];
             }
         }
@@ -754,7 +709,6 @@ function handleIncomingTickPacket(tickData) {
             const digitB = parseInt(triggerDigit2Over2Input.value, 10);
             if (matchConsecutivePair(recentDigitHistory, digitA, digitB)) {
                 fireBulkOver2Batch();
-                // Reset history so the same two digits can't immediately re-trigger the next tick
                 recentDigitHistory = [];
             }
         } else {
@@ -773,9 +727,7 @@ function handleIncomingTickPacket(tickData) {
         }
     } 
     else if (activeTabId === 'tab-bulk-ou' && isAutoTradingOU && !autoBulkCooldown) {
-        const maxAllowed = parseInt(maxTradesOUInput.value, 10) || 10;
-        
-        // Safety check: Does firing the next pair exceed the limit?
+        const maxAllowed = parseInt(maxTradesOUInput.value, 10) || 10;       
         if (totalTradesExecutedOU + 2 > maxAllowed) {
             logToConsole(`[Bot Auto Stop] Max trade cap reached (${totalTradesExecutedOU}/${maxAllowed}). Stopping execution.`, "system-msg");
             toggleAutoOU(false);
@@ -807,9 +759,7 @@ function executeBulkEvenOddPair() {
         return;
     }
 
-    const maxCap = parseInt(maxTradesBEO.value, 10);
-    
-    // Safety check: Ensure the new pair won't push us past the user's defined ceiling limit
+    const maxCap = parseInt(maxTradesBEO.value, 10);  
     if (totalTradesExecutedBEO + 2 > maxCap) {
         logToConsole(`[Bulk EO] Halt: Running this pair would exceed your Max Trades Run Cap of ${maxCap}.`, "error-msg");
         return;
@@ -859,8 +809,6 @@ function executeBulkEvenOddPair() {
     
     optionsWebSocket.send(JSON.stringify(payloadEven));
     optionsWebSocket.send(JSON.stringify(payloadOdd));
-
-    // Increment counter tracking by 2 since we just fired a pair
     totalTradesExecutedBEO += 2;
     logToConsole(`[Bulk EO Run Status]: ${totalTradesExecutedBEO} / ${maxCap} individual contracts executed.`);
 }
@@ -908,9 +856,6 @@ function executeBulkOverUnderPair() {
     
     const overDigit = predOverInput.value.toString();
     const underDigit = predUnderInput.value.toString();
-
-    // 1. GENERATE A UNIQUE RUN TIMESTAMP ID FOR PASSTHROUGH LOGGING
-    // This tags both contracts as twins so the system matches them to the exact execution frame
     const bulkRunToken = "BULK_" + Date.now();
     challengeBatchExpectedCounts[bulkRunToken] = 2;
 
@@ -924,7 +869,7 @@ function executeBulkOverUnderPair() {
             "contract_type": "DIGITOVER",
             "currency": currency,
             "duration": duration,
-            "duration_unit": "t", // 't' guarantees tick-locked expiration
+            "duration_unit": "t",
             "underlying_symbol": symbol,
             "barrier": overDigit
         },
@@ -949,10 +894,6 @@ function executeBulkOverUnderPair() {
     };
 
     logToConsole(`[${bulkRunToken}] Synchronizing parallel execution parameters...`);
-    
-    // 2. IMMEDIATE PIPELINE TRANSMISSION
-    // Sending these back-to-back inside the same microtask queue ensures the server 
-    // processes the buy requests sequentially against the same underlying market tick rate.
     optionsWebSocket.send(JSON.stringify(payloadOver));
     optionsWebSocket.send(JSON.stringify(payloadUnder));
 
@@ -996,8 +937,6 @@ function executePatternOverUnder(match) {
     optionsWebSocket.send(JSON.stringify(payload));
     totalTradesExecutedPOU += 1;
     logToConsole(`[Pattern OU Run Status]: ${totalTradesExecutedPOU} / ${maxTradesPOUInput.value} contracts executed.`);
-
-    // Brief cooldown so we don't fire twice while this tick's downstream messages settle
     patternCooldown = true;
     setTimeout(() => { patternCooldown = false; }, (duration * 2000) + 500);
 }
@@ -1075,12 +1014,8 @@ function handlePurchaseReceipt(buyReceipt, passthrough) {
 }
 function handleContractUpdate(contract) {
     if (!contract || !contract.contract_id) return;
-
-    // Full visibility into every update this contract receives, so a stalled
-    // or misrouted settlement is obvious from the Logs tab instead of silent.
     logToConsole(`[Stream] Contract ${contract.contract_id} \u2192 status: ${contract.status ?? 'n/a'}, profit: ${contract.profit ?? 'n/a'}, is_expired: ${contract.is_expired ?? 'n/a'}`, "system-msg");
 
-    // TN bulk auto-continuation (kept from the original pre-existing logic)
     if (contract.status === "won" || contract.status === "lost") {
         if (contract.passthrough?.bulkRunId?.startsWith("BULK_TN_")) {
             if (isAutoModeTN && totalTradesExecutedTN < parseInt(maxTradesTN.value)) {
@@ -1134,7 +1069,6 @@ function handleContractUpdate(contract) {
             profitCell.style.color = "var(--accent-red)";
         }
 
-        // Accrue session P/L exactly once per contract, on final settlement
         if ((contract.status === "won" || contract.status === "lost") && row.dataset.settled !== "1") {
             row.dataset.settled = "1";
             totalSessionProfit += profitValue;
@@ -1143,11 +1077,6 @@ function handleContractUpdate(contract) {
         }
     }
 
-    // Unsubscribe from closed stream mappings only once the contract has
-    // actually reached a terminal result. Unsubscribing on is_expired alone
-    // cuts the stream before Deriv reports the final won/lost verdict, which
-    // is what was silently starving every P/L tracker (session P/L, TP/SL,
-    // and the Challenge) of ever seeing a settled trade.
     if (contract.status === "won" || contract.status === "lost") {
         if (optionsWebSocket && optionsWebSocket.readyState === WebSocket.OPEN && contract.id) {
             optionsWebSocket.send(JSON.stringify({
@@ -1193,7 +1122,7 @@ function toggleAutoOU(state) {
     
     if(state) {
         autoBulkCooldown = false; 
-        totalTradesExecutedOU = 0; // Reset execution counter for new session run
+        totalTradesExecutedOU = 0; 
         logToConsole(`Bulk Auto-Mode Started. Cap Target: ${maxTradesOUInput.value} total trades. Waiting for next tick...`, "success-msg");
     }
 }
@@ -1257,7 +1186,6 @@ function executeBulkTouchNoTouch() {
     logToConsole(`[TN] Sent pair batch. Barrier: ${barrierStr}, Dur: ${duration}`);
 }
 
-// 3. THE REGISTRATION (This must be OUTSIDE the function)
 if (btnBuyTN) {
     btnBuyTN.addEventListener("click", executeBulkTouchNoTouch);
     console.log("Event listener attached successfully to btn-buy-tn");
@@ -1265,14 +1193,13 @@ if (btnBuyTN) {
     console.error("CRITICAL: btn-buy-tn not found in the DOM!");
 }
 
-// Link the button to the function
 document.getElementById("btn-reset-balance").addEventListener("click", () => {
     if (confirm("Are you sure you want to reset your demo balance to 10,000 USD?")) {
         resetDemoBalance();
     }
 });
 
-// The Reset Function
+// The Reset button functi
 function resetDemoBalance() {
     if (!optionsWebSocket || optionsWebSocket.readyState !== WebSocket.OPEN) {
         logToConsole("Error: WebSocket not connected.", "error-msg");
@@ -1314,15 +1241,8 @@ function logToConsole(message, className = "") {
     logConsole.scrollTop = logConsole.scrollHeight;
 }
 
-// ================= 30-DAY COMPOUNDING CHALLENGE =================
-// Discipline layer: once a day's profit target is hit, every buy/auto/arm
-// button on the dashboard locks until the next calendar day. This is
-// intentionally strict -- there is no "unlock early" control, since the
-// whole point is to remove the temptation to keep trading after a win.
-
+// ================= 30-DAY CHALLENGE =================
 const CHALLENGE_STORAGE_KEY = 'we_trade_challenge_v1';
-
-// Every button anywhere on the dashboard that can place or arm a trade.
 const CHALLENGE_LOCK_BUTTON_IDS = [
     'btn-buy-eo', 'btn-toggle-auto-eo',
     'btn-buy-ou', 'btn-toggle-auto-ou',
@@ -1357,7 +1277,7 @@ function defaultChallengeState() {
         currentDay: 1,
         dayProfit: 0,
         completedDays: [],
-        lockedDate: null   // set to a date string the moment a day's target is hit
+        lockedDate: null   
     };
 }
 
@@ -1393,8 +1313,6 @@ function todayStr() {
     return new Date().toDateString();
 }
 
-// A day counts as "locked" only while it's still today's lock -- the
-// automatic rollover check below clears this the moment the date changes.
 function isChallengeLocked() {
     return challengeState.active && !!challengeState.lockedDate;
 }
@@ -1403,10 +1321,6 @@ function currentChallengeRow() {
     return challengeRows.find(r => r.day === challengeState.currentDay) || null;
 }
 
-// Runs on load and on an interval: if we're locked and the calendar date
-// has moved on since the lock was set, automatically advance to the next
-// day and re-enable trading. Nothing needs to be lost/reset except the
-// running profit counter for the new day.
 function checkChallengeDayRollover() {
     if (!challengeState.active || !challengeState.lockedDate) return;
     if (challengeState.lockedDate !== todayStr()) {
@@ -1424,9 +1338,6 @@ function checkChallengeDayRollover() {
     }
 }
 
-// Called every time a contract settles (won or lost) so the day's real
-// trading P/L accrues toward that day's target, exactly like a normal
-// take-profit tracker -- but scoped per day instead of per session.
 function registerChallengeProfit(profitValue) {
     if (!challengeState.active) {
         logToConsole(`[Challenge] Settled amount (${profitValue >= 0 ? '+' : ''}${profitValue.toFixed(2)}) but no challenge is running \u2014 click "Start Challenge" to begin tracking.`, "system-msg");
@@ -1441,10 +1352,6 @@ function registerChallengeProfit(profitValue) {
     challengeState.dayProfit += profitValue;
     const row = currentChallengeRow();
     logToConsole(`[Challenge] Day ${challengeState.currentDay} P/L now $${challengeState.dayProfit.toFixed(2)} of $${row ? row.target.toFixed(2) : '?'} target.`, "system-msg");
-    // Compare in whole cents, not raw floats -- repeated decimal additions
-    // (e.g. 0.1 + 0.3) commonly land a hair under the true value (like
-    // 0.39999999999999997), which would silently fail a strict >= check
-    // even though both numbers display identically as "0.40".
     const dayProfitCents = Math.round(challengeState.dayProfit * 100);
     const targetCents = row ? Math.round(row.target * 100) : Infinity;
     if (row && dayProfitCents >= targetCents) {
@@ -1599,16 +1506,6 @@ function renderChallengeUI() {
 }
 
 // --- LEDGER-DRIVEN SETTLEMENT WATCHER ---
-// Rather than trust any single websocket code path, the challenge watches
-// the same Live Bulk Strategy Ledger you can see on screen. The instant a
-// row's P/L cell is marked final (class "text-win" or "text-loss" -- the
-// exact same classes handleContractUpdate applies when a contract settles)
-// its profit figure is read straight off the DOM and counted once. This
-// means every strategy that writes to that ledger -- Bulk Over/Under (both
-// legs), Bulk Even/Odd, Bulk Over 2, Bulk Touch/No Touch, and Pattern
-// Over/Under -- is tracked identically and automatically, with the ledger
-// itself as the single source of truth.
-
 function extractProfitFromLedgerCell(cellEl) {
     if (!cellEl) return null;
     const match = (cellEl.textContent || '').match(/[-+]?\d*\.?\d+/);
@@ -1617,10 +1514,6 @@ function extractProfitFromLedgerCell(cellEl) {
     return isNaN(value) ? null : value;
 }
 
-// Populated by each bulk-firing function *before* it sends its buy requests,
-// so we know up front how many legs belong to a single logical trade (e.g.
-// 34 for a Bulk Over 2 trigger, 2 for an Over/Under pair, 1 for Pattern).
-// A batch key with no entry here defaults to 1 leg (a standalone trade).
 const challengeBatchExpectedCounts = {};
 const challengeBatchAccumulators = {};
 
@@ -1629,7 +1522,7 @@ function handleLedgerMutations(mutationsList) {
         if (mutation.type !== 'attributes' || mutation.attributeName !== 'class') return;
         const cell = mutation.target;
         if (!cell.classList || !(cell.classList.contains('text-win') || cell.classList.contains('text-loss'))) return;
-        if (cell.dataset.challengeCounted === '1') return; // never double-count a settled row
+        if (cell.dataset.challengeCounted === '1') return; 
 
         const profitValue = extractProfitFromLedgerCell(cell);
         cell.dataset.challengeCounted = '1';
@@ -1642,9 +1535,6 @@ function handleLedgerMutations(mutationsList) {
         const batchKey = row ? row.dataset.batchKey : null;
 
         if (!batchKey) {
-            // No batch info available (shouldn't normally happen) -- fall
-            // back to the old one-leg-at-a-time behaviour rather than lose
-            // the profit entirely.
             registerChallengeProfit(profitValue);
             return;
         }
@@ -1656,10 +1546,6 @@ function handleLedgerMutations(mutationsList) {
         challengeBatchAccumulators[batchKey] = acc;
 
         if (acc.settled >= expected) {
-            // The whole batch is in -- count it as one combined result so a
-            // multi-leg trigger (e.g. 34 Bulk Over 2 contracts fired together)
-            // is never locked out mid-settlement and never has part of its
-            // real profit silently discarded.
             delete challengeBatchAccumulators[batchKey];
             delete challengeBatchExpectedCounts[batchKey];
             logToConsole(`[Challenge] Batch ${batchKey} fully settled (${expected} leg${expected > 1 ? 's' : ''}), net $${acc.profitSum.toFixed(2)}.`, "system-msg");
@@ -1683,8 +1569,6 @@ function initChallengeLedgerObserver() {
 if (btnStartChallenge) btnStartChallenge.addEventListener('click', startChallenge);
 if (btnResetChallenge) btnResetChallenge.addEventListener('click', resetChallenge);
 
-// Bootstrapping: rebuild the table from whatever state persisted, catch up
-// on any day rollovers that happened while the tab was closed, then paint.
 buildChallengeRows();
 checkChallengeDayRollover();
 if (challengeState.active) applyChallengeLockToButtons(isChallengeLocked());
@@ -1692,9 +1576,6 @@ renderChallengeUI();
 initChallengeLedgerObserver();
 setInterval(checkChallengeDayRollover, 60 * 1000);
 
-// --- QUICK NAV SCROLLSPY (purely cosmetic, fully self-guarded) ---
-// Highlights whichever section is currently in view so the sticky
-// top nav reflects scroll position instead of just being static links.
 (function initQuickNavScrollspy() {
     const navLinks = document.querySelectorAll('.quick-nav-link');
     if (!navLinks.length) return;

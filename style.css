@@ -67,7 +67,6 @@ body {
     gap: 20px;
 }
 
-/* Closing note — reads like a real site's footer disclaimer */
 .dashboard-container::after {
     content: "Session data lives only in this browser tab \2014 nothing is stored server-side.";
     display: block;
@@ -78,13 +77,7 @@ body {
     border-top: 1px solid var(--border-color);
 }
 
-/* ================= APP TOPBAR (header + quick nav) ================= */
-/* Header and quick-nav are wrapped together and stuck as ONE unit.
-   This avoids hardcoding a header height to position the nav under it —
-   on narrow phones the header title can wrap to more lines and grow
-   taller, and a fixed offset would then push the nav bar underneath
-   the header instead of below it. Sticking the pair together sidesteps
-   that entirely. */
+/* APP TOPBAR  */
 .app-topbar {
     position: sticky;
     top: 0;
@@ -93,7 +86,7 @@ body {
     margin-left: calc(50% - 50vw);
 }
 
-/* ================= HEADER ================= */
+/* HEADER */
 
 header {
     padding: 14px max(20px, calc((100vw - var(--container-max)) / 2)) 14px;
@@ -147,12 +140,6 @@ header p {
     color: var(--text-secondary);
     font-size: 0.82rem;
 }
-
-/* ================= QUICK NAV + PERSISTENT TICKER ================= */
-/* Docked right under the header (inside the same sticky topbar). Holds
-   jump-links to every section (so the user isn't stuck scrolling past
-   long cards) AND a live tick/digit readout that stays on screen no
-   matter which strategy tab or section is currently in view. */
 
 .quick-nav {
     padding: 10px max(20px, calc((100vw - var(--container-max)) / 2));
@@ -242,8 +229,6 @@ header p {
     font-weight: 700;
 }
 
-/* Anchor targets: pull section tops down past the sticky header + nav
-   so a jump-link never lands hidden underneath them. */
 #section-setup,
 #section-market,
 #section-challenge,
@@ -253,7 +238,7 @@ header p {
     scroll-margin-top: calc(var(--header-h) + var(--nav-h) + 12px);
 }
 
-/* ================= CARDS ================= */
+/* CARDS */
 
 .card {
     background-color: var(--bg-card);
@@ -297,8 +282,7 @@ header p {
     padding-bottom: 10px;
 }
 
-/* ================= FORMS ================= */
-
+/* FORMS */
 .form-row {
     display: flex;
     gap: 12px;
@@ -341,8 +325,7 @@ input:focus, select:focus {
     box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
-/* ================= BUTTONS ================= */
-
+/* BUTTONS */
 .btn-primary {
     background: linear-gradient(135deg, var(--accent-blue), #2f5ce0);
     color: #fff;
@@ -389,7 +372,6 @@ input:focus, select:focus {
     transform: translateY(0);
 }
 
-/* Color toggle state indicators for running data stream states */
 .stream-active {
     background-color: var(--accent-red) !important;
     border-color: var(--accent-red) !important;
@@ -492,7 +474,7 @@ button:disabled, select:disabled, input:disabled {
     cursor: not-allowed;
 }
 
-/* ================= TAB NAVIGATION ================= */
+/* TAB NAVIGATION */
 
 .tabs-navigation {
     display: flex;
@@ -540,19 +522,15 @@ button:disabled, select:disabled, input:disabled {
 }
 
 .tab-content {
-    display: none; /* Hide all by default */
+    display: none; 
 }
 
 .tab-content.active {
-    display: flex; /* Show active only */
+    display: flex; 
     animation: fade-slide-in 0.35s ease both;
 }
 
-/* ================= FOCUS MODE ================= */
-/* Triggered by tapping a strategy tab: Setup, Accounts and Logs tuck
-   away so the active strategy card sits right above the Ledger, letting
-   the person watch both without scrolling past everything else. */
-
+/*  FOCUS MODE  */
 .focus-bar {
     display: flex;
     align-items: center;
@@ -583,7 +561,7 @@ button:disabled, select:disabled, input:disabled {
     display: none;
 }
 
-/* ================= LEDGER TABLE ================= */
+/* LEDGER TABLE  */
 
 .table-container {
     max-height: 400px;
@@ -653,7 +631,6 @@ button:disabled, select:disabled, input:disabled {
     background: rgba(100, 116, 139, 0.7);
 }
 
-/* Row Context Styles (final cascade preserved: wins render in primary text color, losses in red) */
 .text-win { color: var(--text-primary) !important; font-weight: 700; }
 .text-loss { color: var(--accent-red) !important; font-weight: 700; }
 
@@ -718,7 +695,7 @@ button:disabled, select:disabled, input:disabled {
     line-height: 1.6;
 }
 
-/* ================= 30-DAY CHALLENGE ================= */
+/* CHALLENGE BANNERS */
 
 .challenge-banner {
     padding: 12px 14px;
@@ -791,9 +768,6 @@ button:disabled, select:disabled, input:disabled {
     font-weight: 400;
 }
 
-/* Applied to every buy/auto/arm button on the dashboard while a day's
-   target is locked, so the discipline rule is visible everywhere, not
-   just inside the Challenge card. */
 .challenge-locked-btn {
     opacity: 0.35 !important;
     filter: grayscale(0.5);
@@ -801,7 +775,7 @@ button:disabled, select:disabled, input:disabled {
     animation: none !important;
 }
 
-/* ================= RESULT MODAL ================= */
+/* RESULT MODAL  */
 
 .modal-overlay {
     position: fixed;
@@ -863,7 +837,7 @@ button:disabled, select:disabled, input:disabled {
 .modal-amount.win { color: var(--accent-green); }
 .modal-amount.loss { color: var(--accent-red); }
 
-/* ================= ANIMATIONS ================= */
+/* ANIMATIONS  */
 
 @keyframes fade-slide-in {
     from { opacity: 0; transform: translateY(6px); }
@@ -889,10 +863,7 @@ button:disabled, select:disabled, input:disabled {
     }
 }
 
-/* ================= RESPONSIVE ================= */
-
-/* Desktop: behave like a real multi-panel web app rather than a stacked
-   mobile list — a 3-up settings row up top, full-width workspace below. */
+/*RESPONSIVENESS */
 @media (min-width: 900px) {
     :root {
         --container-max: 1040px;
@@ -905,8 +876,6 @@ button:disabled, select:disabled, input:disabled {
         gap: 20px 20px;
     }
 
-    /* app-topbar (header+nav), tabs + all tab panels, ledger and log run
-       the full width; the setup / accounts cards auto-place into columns */
     .dashboard-container > :nth-child(1),
     .dashboard-container > :nth-child(n+4) {
         grid-column: 1 / -1;
@@ -921,7 +890,6 @@ button:disabled, select:disabled, input:disabled {
         grid-column: 1 / -1;
     }
 
-    /* Tab bar visually docks onto the active panel beneath it */
     .tabs-navigation {
         margin-bottom: -1px;
     }
@@ -1005,8 +973,6 @@ button:disabled, select:disabled, input:disabled {
         padding: 26px 20px;
     }
 
-    /* Safety net: override inline ad-hoc flex rows (button/status pairs) so they
-       stack cleanly instead of squeezing on narrow screens. */
     .card > div[style*="justify-content: space-between"][style*="align-items: center"] {
         flex-direction: column !important;
         align-items: stretch !important;
@@ -1031,7 +997,6 @@ button:disabled, select:disabled, input:disabled {
         height: 130px;
     }
 
-    /* Stack manual/auto button pairs so labels never get clipped */
     .card > div[style*="gap: 10px"] {
         flex-direction: column !important;
     }

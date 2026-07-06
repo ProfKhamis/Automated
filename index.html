@@ -126,8 +126,8 @@
             </div>
 
             <div style="display: flex; gap: 10px;">
-                <button id="btn-start-challenge" class="btn-primary" style="flex: 1;">Start Challenge</button>
-                <button id="btn-reset-challenge" class="btn-secondary" style="flex: 1;">Restart Challenge</button>
+                <button id="btn-start-challenge" class="btn-primary" style="flex: 1;">Kua Tajiri</button>
+                <button id="btn-reset-challenge" class="btn-secondary" style="flex: 1;">Kua Maskini</button>
             </div>
 
             <div id="challenge-status-banner" class="challenge-banner" style="display: none;"></div>
@@ -173,9 +173,6 @@
             <button class="tab-btn" data-target="tab-pattern-ou">Pattern Over/Under</button>
         </div>
 
-        <!-- Focus Mode bar: appears once a strategy tab is tapped. Setup,
-             Accounts and Logs tuck away so the active strategy sits right
-             above the Ledger, letting both be watched at once. -->
         <div class="focus-bar" id="focus-bar" style="display: none;">
             <span class="system-msg">Focus mode: showing this strategy + the ledger only.</span>
             <button id="btn-exit-focus" class="btn-secondary">Show Full Dashboard</button>
@@ -206,7 +203,7 @@
 
     <div style="display: flex; gap: 10px; margin-top: 14px;">
         <button id="btn-buy-beo" class="btn-primary" style="background-color: var(--accent-green); flex: 1;">Buy EO Pair Manually</button>
-        <button id="btn-toggle-auto-beo" class="btn-secondary" style="flex: 1;">Start Auto Bulk Mode</button>
+        <button id="btn-toggle-auto-beo" class="btn-secondary" style="flex: 1;">Auto Bulk Mode</button>
     </div>
 </section>
         <section class="card tab-content active" id="tab-even-odd">
@@ -264,8 +261,8 @@
             </div>
 
             <div style="display: flex; gap: 10px; margin-top: 4px;">
-                <button id="btn-toggle-auto-pou" class="btn-secondary" style="flex: 1;" disabled>Start Pattern
-                    Auto-Mode</button>
+                <button id="btn-toggle-auto-pou" class="btn-secondary" style="flex: 1;" disabled>Pattern auto
+                    detector</button>
             </div>
         </section>
 
@@ -303,7 +300,7 @@
             <div style="display: flex; gap: 10px; margin-top: 14px;">
                 <button id="btn-buy-ou" class="btn-primary" style="background-color: var(--accent-green); flex: 1;"
                     disabled>Buy Pair Manually</button>
-                <button id="btn-toggle-auto-ou" class="btn-secondary" style="flex: 1;" disabled>Start Auto Bulk
+                <button id="btn-toggle-auto-ou" class="btn-secondary" style="flex: 1;" disabled>Auto Bulk
                     Mode</button>
             </div>
 
@@ -334,7 +331,7 @@
                     <label>Trigger Mode:</label>
                     <select id="trigger-mode-over2">
                         <option value="single">Single Digit</option>
-                        <option value="double">Two-Digit Sequence (consecutive)</option>
+                        <option value="double">Two-Digit Sequence</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -365,7 +362,7 @@
         </section>
 
         <section class="card" id="section-ledger">
-            <h3>Live Bulk Strategy Ledger</h3>
+            <h3>Live Bulk Ledger</h3>
             <button id="btn-clear-ledger" class="btn-secondary" style="font-size: 0.8rem; padding: 4px 8px;">Clear Ledger</button>
             <div class="table-container">
                 <table class="ledger-table">
