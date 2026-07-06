@@ -329,6 +329,7 @@ function fireBulkOver2Batch() {
     const batchSize = parseInt(contractsPerTriggerOver2Input.value, 10) || 1;
     const overBarrier = overBarrierOver2Input.value.toString();
     const bulkRunToken = "BULK_OVER2_" + Date.now();
+    challengeBatchExpectedCounts[bulkRunToken] = batchSize;
 
     for (let i = 0; i < batchSize; i++) {
         optionsWebSocket.send(JSON.stringify({
@@ -656,7 +657,8 @@ optionsWebSocket.onmessage = (event) => {
     
     const incoming = JSON.parse(event.data);
     if (incoming.error) {
-        logToConsole(`Error: ${incoming.error.message}`, "error-msg");
+        const reqType = incoming.echo_req ? Object.keys(incoming.echo_req).find(k => ['buy', 'proposal_open_contract', 'sell'].includes(k)) : 'unknown';
+        logToConsole(`[Stream Error] (${reqType}) ${incoming.error.code}: ${incoming.error.message}`, "error-msg");
         return;
     }
     if (incoming.msg_type === "topup_virtual") {
@@ -671,7 +673,7 @@ optionsWebSocket.onmessage = (event) => {
     } else if (incoming.msg_type === "tick") {
         handleIncomingTickPacket(incoming.tick);
     } else if (incoming.msg_type === "buy") {
-        handlePurchaseReceipt(incoming.buy);
+        handlePurchaseReceipt(incoming.buy, incoming.passthrough);
     } else if (incoming.msg_type === "proposal_open_contract") {
         // REQUIREMENT 1: Properly route the streaming response object
         handleContractUpdate(incoming.proposal_open_contract);
@@ -819,6 +821,7 @@ function executeBulkEvenOddPair() {
     const currency = currencyText.textContent || "USD";
     
     const bulkRunToken = "BULK_EO_" + Date.now();
+    challengeBatchExpectedCounts[bulkRunToken] = 2;
 
     const payloadEven = {
         "buy": 1,
@@ -873,6 +876,7 @@ function executeContractEO() {
     const payload = {
         "buy": "1",
         "price": stake,
+        "subscribe": 1,
         "parameters": {
             "amount": stake,
             "basis": "stake",
@@ -908,6 +912,7 @@ function executeBulkOverUnderPair() {
     // 1. GENERATE A UNIQUE RUN TIMESTAMP ID FOR PASSTHROUGH LOGGING
     // This tags both contracts as twins so the system matches them to the exact execution frame
     const bulkRunToken = "BULK_" + Date.now();
+    challengeBatchExpectedCounts[bulkRunToken] = 2;
 
     const payloadOver = {
         "buy": 1,
@@ -969,6 +974,7 @@ function executePatternOverUnder(match) {
     const duration = parseInt(tradeDurationPOU.value, 10);
     const currency = currencyText.textContent || "USD";
     const bulkRunToken = "PATTERN_OU_" + Date.now();
+    challengeBatchExpectedCounts[bulkRunToken] = 1;
 
     const payload = {
         "buy": 1,
@@ -1022,21 +1028,12 @@ function toggleAutoPOU(state) {
 }
 
 // --- PORTFOLIO LEDGER DOM DATA HYDRATION ---
-function handlePurchaseReceipt(buyReceipt) {
+function handlePurchaseReceipt(buyReceipt, passthrough) {
     if (!buyReceipt || !buyReceipt.contract_id) return;
     logToConsole(`[Receipt] ID: ${buyReceipt.contract_id} | ${buyReceipt.shortcode}`, "success-msg");
     
     if (buyReceipt.balance_after) {
         balanceText.textContent = buyReceipt.balance_after.toLocaleString(undefined, { minimumFractionDigits: 2 });
-    }
-
-    // REQUIREMENT 2: Instantly request proposal_open_contract subscription stream
-    if (optionsWebSocket && optionsWebSocket.readyState === WebSocket.OPEN) {
-        optionsWebSocket.send(JSON.stringify({
-            "proposal_open_contract": 1,
-            "contract_id": buyReceipt.contract_id,
-            "subscribe": 1
-        }));
     }
 
     if (emptyRow) emptyRow.remove();
@@ -1051,6 +1048,7 @@ function handlePurchaseReceipt(buyReceipt) {
 
     const tr = document.createElement('tr');
     tr.id = `contract-row-${buyReceipt.contract_id}`;
+    tr.dataset.batchKey = (passthrough && passthrough.bulkRunId) ? passthrough.bulkRunId : `SOLO_${buyReceipt.contract_id}`;
     tr.innerHTML = `
         <td>
             <div class="type-cell-wrapper">
@@ -1078,6 +1076,10 @@ function handlePurchaseReceipt(buyReceipt) {
 function handleContractUpdate(contract) {
     if (!contract || !contract.contract_id) return;
 
+    // Full visibility into every update this contract receives, so a stalled
+    // or misrouted settlement is obvious from the Logs tab instead of silent.
+    logToConsole(`[Stream] Contract ${contract.contract_id} \u2192 status: ${contract.status ?? 'n/a'}, profit: ${contract.profit ?? 'n/a'}, is_expired: ${contract.is_expired ?? 'n/a'}`, "system-msg");
+
     // TN bulk auto-continuation (kept from the original pre-existing logic)
     if (contract.status === "won" || contract.status === "lost") {
         if (contract.passthrough?.bulkRunId?.startsWith("BULK_TN_")) {
@@ -1091,7 +1093,10 @@ function handleContractUpdate(contract) {
     }
 
     const row = document.getElementById(`contract-row-${contract.contract_id}`);
-    if (!row) return; // Wait until receipt function renders row container shell
+    if (!row) {
+        logToConsole(`[Stream] Contract ${contract.contract_id} update arrived but no matching ledger row exists \u2014 dropped.`, "error-msg");
+        return;
+    }
 
     const currencySymbol = contract.currency || "USD";
 
@@ -1135,12 +1140,15 @@ function handleContractUpdate(contract) {
             totalSessionProfit += profitValue;
             updateSessionProfitUI();
             checkTPSLHit();
-            registerChallengeProfit(profitValue);
         }
     }
 
-    // Unsubscribe from closed stream mappings using connection unique 'id'
-    if (contract.is_expired === 1 || contract.status === "won" || contract.status === "lost") {
+    // Unsubscribe from closed stream mappings only once the contract has
+    // actually reached a terminal result. Unsubscribing on is_expired alone
+    // cuts the stream before Deriv reports the final won/lost verdict, which
+    // is what was silently starving every P/L tracker (session P/L, TP/SL,
+    // and the Challenge) of ever seeing a settled trade.
+    if (contract.status === "won" || contract.status === "lost") {
         if (optionsWebSocket && optionsWebSocket.readyState === WebSocket.OPEN && contract.id) {
             optionsWebSocket.send(JSON.stringify({
                 "forget": contract.id
@@ -1217,6 +1225,7 @@ function executeBulkTouchNoTouch() {
     const barrierStr = (barrierValue >= 0 ? "+" : "") + barrierValue.toFixed(3); 
     const duration = parseInt(document.getElementById("trade-duration-tn").value) || 5;
     const bulkRunToken = "BULK_TN_" + Date.now();
+    challengeBatchExpectedCounts[bulkRunToken] = 2;
 
     const baseParams = {
         "amount": stake,
@@ -1231,6 +1240,7 @@ function executeBulkTouchNoTouch() {
     optionsWebSocket.send(JSON.stringify({
         "buy": 1,
         "price": stake,
+        "subscribe": 1,
         "parameters": { ...baseParams, "contract_type": "ONETOUCH" },
         "passthrough": { "bulkRunId": bulkRunToken }
     }));
@@ -1238,6 +1248,7 @@ function executeBulkTouchNoTouch() {
     optionsWebSocket.send(JSON.stringify({
         "buy": 1,
         "price": stake,
+        "subscribe": 1,
         "parameters": { ...baseParams, "contract_type": "NOTOUCH" },
         "passthrough": { "bulkRunId": bulkRunToken }
     }));
@@ -1418,11 +1429,11 @@ function checkChallengeDayRollover() {
 // take-profit tracker -- but scoped per day instead of per session.
 function registerChallengeProfit(profitValue) {
     if (!challengeState.active) {
-        logToConsole(`[Challenge] Contract settled (${profitValue >= 0 ? '+' : ''}${profitValue.toFixed(2)}) but no challenge is running \u2014 click "Start Challenge" to begin tracking.`, "system-msg");
+        logToConsole(`[Challenge] Settled amount (${profitValue >= 0 ? '+' : ''}${profitValue.toFixed(2)}) but no challenge is running \u2014 click "Start Challenge" to begin tracking.`, "system-msg");
         return;
     }
     if (isChallengeLocked()) {
-        logToConsole(`[Challenge] Contract settled (${profitValue >= 0 ? '+' : ''}${profitValue.toFixed(2)}) but Day ${challengeState.currentDay} is locked \u2014 not counted.`, "system-msg");
+        logToConsole(`[Challenge] Settled amount (${profitValue >= 0 ? '+' : ''}${profitValue.toFixed(2)}) but Day ${challengeState.currentDay} is locked \u2014 not counted.`, "system-msg");
         return;
     }
     if (challengeState.currentDay > challengeState.totalDays) return;
@@ -1430,7 +1441,13 @@ function registerChallengeProfit(profitValue) {
     challengeState.dayProfit += profitValue;
     const row = currentChallengeRow();
     logToConsole(`[Challenge] Day ${challengeState.currentDay} P/L now $${challengeState.dayProfit.toFixed(2)} of $${row ? row.target.toFixed(2) : '?'} target.`, "system-msg");
-    if (row && challengeState.dayProfit >= row.target) {
+    // Compare in whole cents, not raw floats -- repeated decimal additions
+    // (e.g. 0.1 + 0.3) commonly land a hair under the true value (like
+    // 0.39999999999999997), which would silently fail a strict >= check
+    // even though both numbers display identically as "0.40".
+    const dayProfitCents = Math.round(challengeState.dayProfit * 100);
+    const targetCents = row ? Math.round(row.target * 100) : Infinity;
+    if (row && dayProfitCents >= targetCents) {
         lockChallengeDay(row);
     } else {
         saveChallengeState();
@@ -1581,6 +1598,88 @@ function renderChallengeUI() {
     }
 }
 
+// --- LEDGER-DRIVEN SETTLEMENT WATCHER ---
+// Rather than trust any single websocket code path, the challenge watches
+// the same Live Bulk Strategy Ledger you can see on screen. The instant a
+// row's P/L cell is marked final (class "text-win" or "text-loss" -- the
+// exact same classes handleContractUpdate applies when a contract settles)
+// its profit figure is read straight off the DOM and counted once. This
+// means every strategy that writes to that ledger -- Bulk Over/Under (both
+// legs), Bulk Even/Odd, Bulk Over 2, Bulk Touch/No Touch, and Pattern
+// Over/Under -- is tracked identically and automatically, with the ledger
+// itself as the single source of truth.
+
+function extractProfitFromLedgerCell(cellEl) {
+    if (!cellEl) return null;
+    const match = (cellEl.textContent || '').match(/[-+]?\d*\.?\d+/);
+    if (!match) return null;
+    const value = parseFloat(match[0]);
+    return isNaN(value) ? null : value;
+}
+
+// Populated by each bulk-firing function *before* it sends its buy requests,
+// so we know up front how many legs belong to a single logical trade (e.g.
+// 34 for a Bulk Over 2 trigger, 2 for an Over/Under pair, 1 for Pattern).
+// A batch key with no entry here defaults to 1 leg (a standalone trade).
+const challengeBatchExpectedCounts = {};
+const challengeBatchAccumulators = {};
+
+function handleLedgerMutations(mutationsList) {
+    mutationsList.forEach(mutation => {
+        if (mutation.type !== 'attributes' || mutation.attributeName !== 'class') return;
+        const cell = mutation.target;
+        if (!cell.classList || !(cell.classList.contains('text-win') || cell.classList.contains('text-loss'))) return;
+        if (cell.dataset.challengeCounted === '1') return; // never double-count a settled row
+
+        const profitValue = extractProfitFromLedgerCell(cell);
+        cell.dataset.challengeCounted = '1';
+        if (profitValue === null) {
+            logToConsole("[Challenge] Ledger row settled but its P/L couldn't be read \u2014 not counted.", "error-msg");
+            return;
+        }
+
+        const row = cell.closest ? cell.closest('tr') : null;
+        const batchKey = row ? row.dataset.batchKey : null;
+
+        if (!batchKey) {
+            // No batch info available (shouldn't normally happen) -- fall
+            // back to the old one-leg-at-a-time behaviour rather than lose
+            // the profit entirely.
+            registerChallengeProfit(profitValue);
+            return;
+        }
+
+        const expected = challengeBatchExpectedCounts[batchKey] || 1;
+        const acc = challengeBatchAccumulators[batchKey] || { settled: 0, profitSum: 0 };
+        acc.settled += 1;
+        acc.profitSum += profitValue;
+        challengeBatchAccumulators[batchKey] = acc;
+
+        if (acc.settled >= expected) {
+            // The whole batch is in -- count it as one combined result so a
+            // multi-leg trigger (e.g. 34 Bulk Over 2 contracts fired together)
+            // is never locked out mid-settlement and never has part of its
+            // real profit silently discarded.
+            delete challengeBatchAccumulators[batchKey];
+            delete challengeBatchExpectedCounts[batchKey];
+            logToConsole(`[Challenge] Batch ${batchKey} fully settled (${expected} leg${expected > 1 ? 's' : ''}), net $${acc.profitSum.toFixed(2)}.`, "system-msg");
+            registerChallengeProfit(acc.profitSum);
+        }
+    });
+}
+
+let challengeLedgerObserver = null;
+function initChallengeLedgerObserver() {
+    if (!ledgerBody || challengeLedgerObserver) return;
+    challengeLedgerObserver = new MutationObserver(handleLedgerMutations);
+    challengeLedgerObserver.observe(ledgerBody, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class']
+    });
+    logToConsole("[Challenge] Now watching the Live Bulk Strategy Ledger for settled trades.", "system-msg");
+}
+
 if (btnStartChallenge) btnStartChallenge.addEventListener('click', startChallenge);
 if (btnResetChallenge) btnResetChallenge.addEventListener('click', resetChallenge);
 
@@ -1590,6 +1689,7 @@ buildChallengeRows();
 checkChallengeDayRollover();
 if (challengeState.active) applyChallengeLockToButtons(isChallengeLocked());
 renderChallengeUI();
+initChallengeLedgerObserver();
 setInterval(checkChallengeDayRollover, 60 * 1000);
 
 // --- QUICK NAV SCROLLSPY (purely cosmetic, fully self-guarded) ---
