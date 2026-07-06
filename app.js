@@ -2,7 +2,7 @@ const BASE_URL = 'https://api.derivws.com';
 let accountList = [];
 let optionsWebSocket = null;
 let totalSessionProfit = 0;
-const sessionProfitDisplay = document.getElementById("session-profit-display"); // We will create this in HTML
+const sessionProfitDisplay = document.getElementById("session-profit-display"); 
 let activeTabId = 'tab-even-odd';
 let isAutoTradingEO = false;
 let isAutoTradingOU = false;
@@ -673,10 +673,6 @@ function subscribeToSymbolTicks(symbolCode) {
 // --- AUTO ENGINE RUNNER AND TICK PROCESSING ---
 function handleIncomingTickPacket(tickData) {
     if (!tickData || !tickData.quote) return;
-
-    // --- HOT PATH: compute the digit and fire any armed trade decisions
-    // BEFORE touching the DOM. JS is single-threaded, so whatever runs
-    // first here truly runs first - UI writes must not sit in front of send().
     const priceString = tickData.quote.toString();
     const lastDigit = parseInt(priceString.charAt(priceString.length - 1), 10);
 
